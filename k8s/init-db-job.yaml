@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-db
+  namespace: default
+  labels:
+    app: geojson-ingestion
+    job: init-db
+spec:
+  template:
+    spec:
+      containers:
+      - name: init-db
+        image: postgres:15
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          echo "Initializing PostGIS database..."
+          
+          # Wait for database to be ready
+          until pg_isready -h $DB_HOST -U $DB_USER -d $DB_NAME; do
+            echo "Waiting for database..."
+            sleep 2
+          done
+          
+          # Connect and initialize
+          PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME << 'EOF'
+          -- Enable PostGIS extension
+          CREATE EXTENSION IF NOT EXISTS postgis;
+          
+          -- Create geo_features table if it doesn't exist
+          CREATE TABLE IF NOT EXISTS geo_features (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255),
+              geometry_type VARCHAR(50),
+              geom GEOMETRY(GEOMETRY, 4326),
+              properties JSONB,
+              raw_geometry JSONB,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          
+          -- Create indexes if they don't exist
+          CREATE INDEX IF NOT EXISTS idx_geo_features_geom ON geo_features USING GIST (geom);
+          CREATE INDEX IF NOT EXISTS idx_geo_features_type ON geo_features (geometry_type);
+          CREATE INDEX IF NOT EXISTS idx_geo_features_name ON geo_features (name);
+          CREATE INDEX IF NOT EXISTS idx_geo_features_properties ON geo_features USING GIN (properties);
+          
+          -- Verify setup
+          SELECT 'PostGIS version:' as info, PostGIS_Version() as version;
+          SELECT 'Tables created:' as info, COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public';
+          SELECT 'PostGIS enabled:' as info, COUNT(*) as count FROM pg_extension WHERE extname = 'postgis';
+          EOF
+          
+          echo "Database initialization complete!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: geojson-db-secret
+              key: DB_PASSWORD
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: geojson-db-secret
+              key: DB_HOST
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: geojson-db-secret
+              key: DB_USER
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: geojson-db-secret
+              key: DB_NAME
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: geojson-db-secret
+              key: DB_PORT
+      restartPolicy: Never
+      backoffLimit: 3

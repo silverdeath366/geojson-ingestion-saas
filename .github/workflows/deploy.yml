@@ -46,6 +46,17 @@ jobs:
         kubectl apply -f k8s/service.yaml
         kubectl apply -f k8s/hpa.yaml
         kubectl apply -f k8s/secret.yaml
+        
+    - name: Initialize Database (if needed)
+      run: |
+        # Check if database needs initialization
+        if ! kubectl exec -it $(kubectl get pods -l app=geojson-ingestion -o jsonpath='{.items[0].metadata.name}') -- python3 -c "import psycopg2; import os; conn = psycopg2.connect(host=os.getenv('DB_HOST'), database=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), password=os.getenv('DB_PASSWORD'), port=os.getenv('DB_PORT'), sslmode=os.getenv('DB_SSLMODE')); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_name = \'geo_features\';'); count = cursor.fetchone()[0]; print(count); conn.close()" | grep -q "0"; then
+          echo "Database already initialized, skipping init-db job"
+        else
+          echo "Initializing database with init-db job"
+          kubectl apply -f k8s/init-db-job.yaml
+          kubectl wait --for=condition=complete job/init-db --timeout=300s
+        fi
 
     - name: Wait for deployment
       run: |
