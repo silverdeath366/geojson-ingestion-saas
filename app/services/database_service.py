@@ -70,8 +70,11 @@ class DatabaseService:
         -- Enable PostGIS extension if not already enabled
         CREATE EXTENSION IF NOT EXISTS postgis;
         
+        -- Drop and recreate geo_features table to ensure correct schema
+        DROP TABLE IF EXISTS geo_features CASCADE;
+        
         -- Create geo_features table
-        CREATE TABLE IF NOT EXISTS geo_features (
+        CREATE TABLE geo_features (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255),
             geometry_type VARCHAR(50),
@@ -83,16 +86,16 @@ class DatabaseService:
         );
         
         -- Create spatial index
-        CREATE INDEX IF NOT EXISTS idx_geo_features_geom ON geo_features USING GIST (geom);
+        CREATE INDEX idx_geo_features_geom ON geo_features USING GIST (geom);
         
         -- Create index on geometry type for faster filtering
-        CREATE INDEX IF NOT EXISTS idx_geo_features_type ON geo_features (geometry_type);
+        CREATE INDEX idx_geo_features_type ON geo_features (geometry_type);
         
         -- Create index on name for faster searches
-        CREATE INDEX IF NOT EXISTS idx_geo_features_name ON geo_features (name);
+        CREATE INDEX idx_geo_features_name ON geo_features (name);
         
         -- Create index on properties for JSON queries
-        CREATE INDEX IF NOT EXISTS idx_geo_features_properties ON geo_features USING GIN (properties);
+        CREATE INDEX idx_geo_features_properties ON geo_features USING GIN (properties);
         """
         
         try:
