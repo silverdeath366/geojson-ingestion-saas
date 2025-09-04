@@ -255,6 +255,5 @@ docker-compose logs db
 4. Add tests if applicable
 5. Submit a pull request
 
-## License
 
-This project is part of the Terraform infrastructure setup for geospatial data processing.
+
